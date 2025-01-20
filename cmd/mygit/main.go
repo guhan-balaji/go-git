@@ -6,7 +6,6 @@ import (
 	"fmt"
         "io"
 	"os"
-        "strings"
 )
 
 // Usage: your_program.sh <command> <arg1> <arg2> ...
@@ -56,16 +55,14 @@ func main() {
                 }
                 defer r.Close()
 
-                var sb strings.Builder
-                io.Copy(&sb, r)
-                blob := sb.String()
-                for i, c := range blob {
-                        if c == 0 {
-                                content := blob[i+1:]
-                                fmt.Print(content)
-                                break
-                        }
+                blob, err := io.ReadAll(r)
+                if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading blob: %s\n", err)
                 }
+
+                parts := bytes.Split(blob, []byte("\x00"))
+                content := string(parts[1])
+                fmt.Print(content)
 
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command %s\n", command)
