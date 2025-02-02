@@ -39,6 +39,9 @@ func main() {
         case "hash-object":
                 handleHashObject()
 
+        case "ls-tree":
+                handleLsTree()
+
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command %s\n", command)
 		os.Exit(1)
@@ -115,6 +118,74 @@ func handleHashObject() {
                 if err != nil {
                         fmt.Fprintf(os.Stderr, "Error writing object file %s: %s\n", fn, err)
                         os.Exit(1)
+                }
+        }
+}
+
+func handleLsTree() {
+        var nameOnly bool
+        var hash string
+        if os.Args[2] == "--name-only" && len(os.Args) > 3 {
+                hash = os.Args[3]
+                nameOnly = true
+        } else {
+                hash = os.Args[2]
+        }
+
+        if len(hash) != 40 {
+                fmt.Fprintf(os.Stderr, "Invalid hash: %s\n", hash)
+		os.Exit(1)
+        }
+
+        dir, file := hash[:2], hash[2:]
+        b, err := os.ReadFile("./.git/objects/" + dir + "/" + file)
+        if err != nil {
+                fmt.Fprintf(os.Stderr, "Error reading blob: %s\n", err)
+		os.Exit(1)
+        }
+
+        buff := bytes.NewBuffer(b)
+        r, err := zlib.NewReader(buff)
+        if err != nil {
+                fmt.Fprintf(os.Stderr, "Error reading blob: %s\n", err)
+		os.Exit(1)
+        }
+        defer r.Close()
+
+        blob, err := io.ReadAll(r)
+        if err != nil {
+                fmt.Fprintf(os.Stderr, "Error reading blob: %s\n", err)
+		os.Exit(1)
+        }
+
+        parts := bytes.Split(blob, []byte("\x00"))
+        for i, part := range parts[:len(parts) - 1] {
+                if i == 0 && bytes.HasPrefix(part, []byte("tree")) {
+                        continue
+                } else if i == 0 {
+                        fmt.Fprintf(os.Stderr, "Not a tree object.")
+                        os.Exit(1)
+
+                }
+
+                var mode, name, sha []byte
+                var info [][]byte
+
+                if i == 1 {
+                        info = bytes.Split(part, []byte(" "))
+                } else {
+                        info = bytes.Split(part[20:], []byte(" "))
+                }
+
+                mode = info[0]
+                name = info[1]
+                sha = parts[i+1][:20]
+
+                if nameOnly {
+                        fmt.Printf("%s\n", name)
+                } else {
+
+                        fmt.Printf("%s %s %x\n", mode, name, sha)
                 }
         }
 }
